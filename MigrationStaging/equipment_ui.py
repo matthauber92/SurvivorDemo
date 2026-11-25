@@ -1,0 +1,192 @@
+import unreal,ast,json
+import toolset_registry
+import sys
+sys.path.insert(0,str(__import__('pathlib').Path(unreal.Paths.project_dir())/'MigrationStaging'))
+import equipment_dsl,importlib
+importlib.reload(equipment_dsl)
+from equipment_dsl import typed
+from pathlib import Path
+from editor_toolset.toolsets.blueprint import BlueprintTools as B,ContainerType,_BlueprintCache
+R='/Game/AIExample/';pc=unreal.load_asset(R+'Items/BP_InventoryPlayerController');ui=unreal.load_asset(R+'UI/WBP_Inventory');inv=unreal.load_asset(R+'Items/BP_InventoryComponent')
+def var(bp,n,t,array=False):
+ if n not in B.list_variables(bp):
+  if isinstance(t,str):B.add_variable(bp,n,t,container_type=ContainerType.ARRAY if array else None)
+  else:B.add_object_variable(bp,n,t,container_type=ContainerType.ARRAY if array else None)
+def fn(bp,n,ins=[],outs=[]):
+ g=B.get_graph(bp,n)
+ if not g:
+  g=B.add_function_graph(bp,n)
+  for k,t in ins:B.add_function_param(g,k,t,True)
+  for k,t in outs:B.add_function_param(g,k,t,False)
+ return g
+def write(bp,n,code):
+ with toolset_registry.tool_raising_exceptions():
+  B.write_graph_dsl(fn(bp,n),typed(code))
+ B.compile_blueprint(bp)
+ assert bp.get_editor_property('status')==unreal.BlueprintStatus.BS_UP_TO_DATE,(n,bp.get_editor_property('status'))
+ print('EQUIPMENT_UI',n)
+args=[('SourceLocation','int'),('TargetLocation','int'),('ExpectedInstance','string'),('ExpectedVersion','int')]
+eg=B.get_graph(pc,'EventGraph')
+event=next((n for n in B.find_nodes(eg) if isinstance(n,unreal.K2Node_CustomEvent) and 'ServerTransferWeapon' in B._get_node_info(n).type_id),None)
+if not event:
+ sig=B.add_event_dispatcher(pc,'EquipmentRequestSignature')
+ for n,t in args:B.add_function_param(sig,n,t,True)
+ B.compile_blueprint(pc)
+ event=unreal.BlueprintGraphEditor.get_graph_editor(eg).add_dispatcher_event_node('EquipmentRequestSignature')
+ commands=unreal.ConsoleVariablesAsset()
+ for prop,value in [('CustomFunctionName','ServerTransferWeapon'),('FunctionFlags','203555008')]:
+  entry=unreal.ConsoleVariablesEditorAssetSaveData();entry.import_text('(CommandName="set '+event.get_path_name()+' '+prop+'",CommandValueAsString="'+value+'",CheckedState=Checked)');commands.add_or_set_console_object_saved_data(entry)
+ commands.execute_saved_commands(unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem).get_editor_world());B.compile_blueprint(pc)
+ call=B.create_node(eg,'Class|BPInventoryComponent|TryTransferWeapon',unreal.IntPoint(600,1800))
+ getter=B.create_node(eg,'Variables|Default|GetInventoryComponent',unreal.IntPoint(350,2100))
+ ei=B._get_node_info(event)
+ for pin in B._get_node_info(call).input_pins:
+  if pin.name=='execute':B.connect_pins(next(x.pin_id for x in ei.output_pins if x.name=='then'),pin.pin_id)
+  elif pin.name=='self':B.connect_pins(B._get_node_info(getter).output_pins[0].pin_id,pin.pin_id)
+  elif any(x.name==pin.name for x in ei.output_pins):B.connect_pins(next(x.pin_id for x in ei.output_pins if x.name==pin.name),pin.pin_id)
+ B.remove_function_graph(pc,'EquipmentRequestSignature')
+ B.compile_blueprint(pc)
+fn(pc,'RequestEquipmentTransfer',args)
+write(pc,'RequestEquipmentTransfer','''(fn RequestEquipmentTransfer (SourceLocation TargetLocation ExpectedInstance ExpectedVersion)
+ (if (and (Pawn|IsLocalController) (Variables|Default|GetInventoryOpen))
+  (CallFunction|ServerTransferWeapon :SourceLocation SourceLocation :TargetLocation TargetLocation :ExpectedInstance ExpectedInstance :ExpectedVersion ExpectedVersion)))''')
+unreal.EditorAssetLibrary.save_loaded_asset(pc)
+for n,t,array in [('EquipmentFrames',unreal.Border.static_class(),True),('EquipmentIcons',unreal.Border.static_class(),True),('EquipmentNames',unreal.TextBlock.static_class(),True),('EquipmentStatusLabel',unreal.TextBlock.static_class(),False),('EquipmentSelectionLabel',unreal.TextBlock.static_class(),False),('SelectedLocation','int',False),('SelectedInstance','string',False),('SelectedVersion','int',False)]:var(ui,n,t,array)
+if 'EquipmentRightClick' not in B.list_variables(ui):B.add_struct_variable(ui,'EquipmentRightClick',unreal.load_object(None,'/Script/InputCore.Key'))
+B.compile_blueprint(ui);cdo=unreal.get_default_object(ui.generated_class());cdo.set_editor_property('SelectedLocation',-1)
+key=unreal.Key();key.import_text('RightMouseButton');cdo.set_editor_property('EquipmentRightClick',key)
+catalog=list(cdo.get_editor_property('ItemCatalog'))
+for name in ['DA_PistolItem','DA_EquipmentTestLongGun']:
+ d=unreal.load_asset(R+'Items/'+name)
+ if d not in catalog:catalog.append(d)
+cdo.set_editor_property('ItemCatalog',catalog)
+tree=unreal.find_object(ui,'WidgetTree');canvas=unreal.find_object(tree,'InventoryCanvas')
+def place(w,x,y,width,height):
+ s=w.slot if w.get_parent()==canvas else canvas.add_child_to_canvas(w)
+ s.set_anchors(unreal.Anchors(unreal.Vector2D(.5,.5),unreal.Vector2D(.5,.5)));s.set_position(unreal.Vector2D(x,y));s.set_size(unreal.Vector2D(width,height))
+def text(name,value,size,color=(.8,.84,.8,1)):
+ t=unreal.new_object(unreal.TextBlock,outer=tree,name=name);t.set_text(value);f=t.get_editor_property('font');f.set_editor_property('size',size);t.set_font(f);t.set_color_and_opacity(unreal.SlateColor(specified_color=unreal.LinearColor(*color)));return t
+place(unreal.find_object(tree,'PanelBackground'),-600,-320,1200,640)
+place(unreal.find_object(tree,'Heading'),-570,-292,800,45)
+place(unreal.find_object(tree,'Occupied'),-250,-240,800,30)
+hint=unreal.find_object(tree,'CloseHint');hint.set_text('BACKPACK: DRAG TO MOVE / SWAP      [ I ] / [ ESC ] CLOSE');place(hint,-250,276,820,25)
+for i in range(8):place(unreal.find_object(tree,'Slot'+str(i)),-250+(i%4)*205,-180+(i//4)*180,190,165)
+if not unreal.find_object(tree,'EquipmentSlot0'):
+ for i,title in enumerate(['PRIMARY  /  LONG GUN','SECONDARY  /  LONG GUN','SIDEARM  /  HANDGUN']):
+  border=unreal.new_object(unreal.Border,outer=tree,name='EquipmentSlot'+str(i));border.set_brush_color(unreal.LinearColor(.045,.065,.06,1));border.set_padding(unreal.Margin(12,8,12,8));place(border,-570,-190+i*135,280,125)
+  v=unreal.new_object(unreal.VerticalBox,outer=tree,name='EquipmentContent'+str(i));border.add_child(v)
+  v.add_child_to_vertical_box(text('EquipmentTitle'+str(i),title,12,(.55,.7,.62,1)))
+  icon=unreal.new_object(unreal.Border,outer=tree,name='EquipmentIcon'+str(i));icon.set_brush_color(unreal.LinearColor(.75,.8,.75,1));icon.set_padding(unreal.Margin(0,14,0,14));v.add_child_to_vertical_box(icon).set_padding(unreal.Margin(95,4,95,4))
+  v.add_child_to_vertical_box(text('EquipmentName'+str(i),'EMPTY',14))
+  v.add_child_to_vertical_box(text('EquipmentAction'+str(i),'CLICK TO SELECT  /  RIGHT-CLICK TO UNEQUIP',8,(.55,.61,.57,1)))
+ label=text('EquipmentHeading','WEAPON EQUIPMENT',14);place(label,-570,-240,290,30)
+ status=text('EquipmentStatus','',12,(.85,.72,.5,1));place(status,-570,235,1120,30)
+ selection=text('EquipmentSelection','Select a backpack weapon, then click an equipment slot.',12);place(selection,-570,192,1120,30)
+# Existing canvas child indices 0..11 are retained; equipment frames are 12..14.
+source=ast.parse((Path(unreal.Paths.project_dir())/'MigrationStaging/build_inventory_ui_logic.py').read_text())
+for node in ast.walk(source):
+ if isinstance(node,ast.Call) and isinstance(node.func,ast.Name) and node.func.id=='write' and isinstance(node.args[1],ast.Constant):
+  if node.args[1].value=='CacheSlotWidgets':
+   code=ast.literal_eval(node.args[2]).replace('(fn CacheSlotWidgets ()','(fn CacheSlotWidgets () (Utilities|Array|Clear (Variables|Default|GetSlotFrames))').replace('(bind Contents','(Utilities|Array|Add (Variables|Default|GetSlotFrames) Slot) (bind Contents')
+   write(ui,'CacheSlotWidgets',code)
+  if node.args[1].value=='RefreshInventory' and isinstance(node.args[0],ast.Name) and node.args[0].id=='ui':
+   code=ast.literal_eval(node.args[2]).replace('(if (< i Count)','(Widget|SetRenderOpacity (Utilities|Array|Get(acopy) (Variables|Default|GetSlotFrames) i) 1.0) (bind StorageIndex (Utilities|Array|Get(acopy) (Class|BPInventoryComponent|GetSlotOrder (Variables|Default|GetInventorySource)) i)) (if (< StorageIndex Count)').replace('Get(acopy) IDs i','Get(acopy) IDs StorageIndex').replace('Get(acopy) Quantities i','Get(acopy) Quantities StorageIndex')
+   # Explicit invocation appended inside the function.
+   code=code.replace('(fn RefreshInventory ()','(fn RefreshInventory () (CallFunction|RefreshEquipment)',1)
+   backpack_refresh=code
+fn(ui,'CacheEquipmentWidgets')
+write(ui,'CacheEquipmentWidgets','''(fn CacheEquipmentWidgets ()
+ (Utilities|Array|Clear (Variables|Default|GetEquipmentFrames))
+ (Utilities|Array|Clear (Variables|Default|GetEquipmentIcons))
+ (Utilities|Array|Clear (Variables|Default|GetEquipmentNames))
+ (bind Canvas (Utilities|Casting|CastToCanvasPanel (Widget|Panel|GetContent (Variables|WBP_Inventory|GetBtn_Jump))))
+ (for i (range 3)
+  (bind Frame (Utilities|Casting|CastToBorder (Widget|Panel|GetChildAt Canvas (+ 12 i))))
+  (Utilities|Array|Add (Variables|Default|GetEquipmentFrames) Frame)
+  (bind Contents (Utilities|Casting|CastToVerticalBox (Widget|Panel|GetContent Frame)))
+  (bind Icon (Utilities|Casting|CastToBorder (Widget|Panel|GetChildAt Contents 1)))
+  (bind Label (Utilities|Casting|CastToTextBlock (Widget|Panel|GetChildAt Contents 2)))
+  (Utilities|Array|Add (Variables|Default|GetEquipmentIcons) Icon)
+  (Utilities|Array|Add (Variables|Default|GetEquipmentNames) Label))
+ (Variables|Default|SetEquipmentStatusLabel (Utilities|Casting|CastToTextBlock (Widget|Panel|GetChildAt Canvas 16)))
+ (Variables|Default|SetEquipmentSelectionLabel (Utilities|Casting|CastToTextBlock (Widget|Panel|GetChildAt Canvas 17))))''')
+fn(ui,'RefreshEquipment')
+write(ui,'RefreshEquipment','''(fn RefreshEquipment ()
+ (if (!= (Utilities|Array|Length (Variables|Default|GetEquipmentNames)) 3) (return))
+ (bind Inv (Variables|Default|GetInventorySource))
+ (for i (range 3)
+  (bind Icon (Utilities|Array|Get(acopy) (Variables|Default|GetEquipmentIcons) i))
+  (bind Label (Utilities|Array|Get(acopy) (Variables|Default|GetEquipmentNames) i))
+  (bind Instance (Class|BPInventoryComponent|GetInstanceAtLocation Inv (+ i 8)))
+  (bind Index (Class|BPInventoryComponent|GetWeaponIndex Inv Instance))
+  (Widget|SetText(Text) Label "EMPTY")
+  (Widget|SetRenderOpacity Icon 0.12)
+  (if (Utilities|Array|IsValidIndex (Class|BPInventoryComponent|GetWeaponItemIDs Inv) Index)
+   (bind ID (Utilities|Array|Get(acopy) (Class|BPInventoryComponent|GetWeaponItemIDs Inv) Index))
+   (for Definition (Variables|Default|GetItemCatalog)
+    (if (== (Class|PDAItemDefinition|GetItemID Definition) ID)
+     (Widget|SetText(Text) Label (Class|PDAItemDefinition|GetDisplayName Definition))
+     (Appearance|SetBrushfromTexture Icon (Class|PDAItemDefinition|GetInventoryIcon Definition))
+     (Widget|SetRenderOpacity Icon 1.0)))))
+ (Widget|SetText(Text) (Variables|Default|GetEquipmentStatusLabel) (Utilities|Text|ToText(String) (Class|BPInventoryComponent|GetEquipmentResult Inv)))
+ (if (!= (Variables|Default|GetSelectedVersion) (Class|BPInventoryComponent|GetLayoutVersion Inv))
+  (Variables|Default|SetSelectedLocation -1)
+  (Variables|Default|SetSelectedInstance "")
+  (Widget|SetText(Text) (Variables|Default|GetEquipmentSelectionLabel) "Select a backpack weapon, then click an equipment slot.")))''')
+write(ui,'RefreshInventory',backpack_refresh)
+fn(ui,'FindEquipmentAtPosition',[('Position','Vector2D')],[('Location','int')])
+write(ui,'FindEquipmentAtPosition','''(fn FindEquipmentAtPosition (Position)
+ (for i (range (Utilities|Array|Length (Variables|Default|GetEquipmentFrames)))
+  (if (UserInterface|Geometry|IsUnderLocation (Widget|GetCachedGeometry (Utilities|Array|Get(acopy) (Variables|Default|GetEquipmentFrames) i)) Position)
+   (return (+ i 8)))) (return -1))''')
+fn(ui,'SelectEquipmentSource',[('Location','int')])
+write(ui,'SelectEquipmentSource','''(fn SelectEquipmentSource (Location)
+ (Variables|Default|SetSelectedLocation Location)
+ (Variables|Default|SetSelectedInstance (Class|BPInventoryComponent|GetInstanceAtLocation (Variables|Default|GetInventorySource) Location))
+ (Variables|Default|SetSelectedVersion (Class|BPInventoryComponent|GetLayoutVersion (Variables|Default|GetInventorySource)))
+ (if (== (Variables|Default|GetSelectedInstance) "")
+  (Variables|Default|SetSelectedLocation -1)
+  (Widget|SetText(Text) (Variables|Default|GetEquipmentSelectionLabel) "Select a weapon. Other items cannot use equipment slots.")
+  (else (Widget|SetText(Text) (Variables|Default|GetEquipmentSelectionLabel) "Weapon selected: click a destination. Click its equipment slot again to unequip."))))''')
+fn(ui,'SendEquipmentTransfer',[('Target','int')])
+write(ui,'SendEquipmentTransfer','''(fn SendEquipmentTransfer (Target)
+ (bind PC (Utilities|Casting|CastToBP_InventoryPlayerController (Widget|GetOwningPlayer)))
+ (Class|BPInventoryPlayerController|RequestEquipmentTransfer :self PC :SourceLocation (Variables|Default|GetSelectedLocation) :TargetLocation Target :ExpectedInstance (Variables|Default|GetSelectedInstance) :ExpectedVersion (Variables|Default|GetSelectedVersion))
+ (Variables|Default|SetSelectedLocation -1)
+ (Variables|Default|SetSelectedInstance ""))''')
+# Keep native backpack drag detection; add equipment clicks before it.
+src=ast.parse((Path(unreal.Paths.project_dir())/'MigrationStaging/build_inventory_drag_ui.py').read_text())
+preview=next(ast.literal_eval(n.args[2]) for n in ast.walk(src) if isinstance(n,ast.Call) and isinstance(n.func,ast.Name) and n.func.id=='write' and isinstance(n.args[1],ast.Constant) and n.args[1].value=='OnPreviewMouseButtonDown')
+prefix='''
+ (bind Position (Input|PointerEvent|GetScreenSpacePosition MouseEvent))
+ (bind Equipment (CallFunction|FindEquipmentAtPosition Position))
+ (bind Backpack (CallFunction|FindSlotAtPosition Position))
+ (if (and (== (Input|PointerEvent|GetEffectingButton MouseEvent) (Variables|Default|GetEquipmentRightClick)) (>= Equipment 8))
+  (CallFunction|SelectEquipmentSource Equipment)
+  (CallFunction|SendEquipmentTransfer -1)
+  (return (Widget|EventReply|Handled)))
+ (if (== (Input|PointerEvent|GetEffectingButton MouseEvent) (Variables|Default|GetDragKey))
+  (if (>= Equipment 8)
+   (if (>= (Variables|Default|GetSelectedLocation) 0)
+    (if (== (Variables|Default|GetSelectedLocation) Equipment) (CallFunction|SendEquipmentTransfer -1)
+     (else (CallFunction|SendEquipmentTransfer Equipment)))
+    (else (CallFunction|SelectEquipmentSource Equipment)))
+   (return (Widget|EventReply|Handled)))
+  (if (>= Backpack 0)
+   (if (>= (Variables|Default|GetSelectedLocation) 8)
+    (CallFunction|SendEquipmentTransfer Backpack)
+    (return (Widget|EventReply|Handled)))
+   (CallFunction|SelectEquipmentSource Backpack)))
+'''
+preview=preview.replace('(Variables|Default|SetDragSourceSlot -1)','(Variables|Default|SetDragSourceSlot -1)'+prefix,1)
+write(ui,'OnPreviewMouseButtonDown',preview)
+write(ui,'EventGraph','''(event UserInterface|EventConstruct
+ (CallFunction|CacheSlotWidgets)
+ (CallFunction|CacheEquipmentWidgets)
+ (bind PC (Utilities|Casting|CastToBP_InventoryPlayerController (Widget|GetOwningPlayer)))
+ (Variables|Default|SetInventorySource (Class|BPInventoryPlayerController|GetInventoryComponent PC))
+ (CallFunction|RefreshInventory))''')
+for bp in [pc,ui]:
+ B.compile_blueprint(bp,warnings_as_errors=True);assert bp.get_editor_property('status')==unreal.BlueprintStatus.BS_UP_TO_DATE
+ unreal.EditorAssetLibrary.save_loaded_asset(bp,only_if_is_dirty=False)
+print('EQUIPMENT_UI_COMPLETE')

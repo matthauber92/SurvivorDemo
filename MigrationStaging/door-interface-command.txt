@@ -1,0 +1,1 @@
+set /Game/AIExample/Interaction/BP_InteractionTestDoor.BP_InteractionTestDoor ImplementedInterfaces ((Interface=BlueprintGeneratedClass'/Game/AIExample/Interaction/BPI_Interactable.BPI_Interactable_C'))

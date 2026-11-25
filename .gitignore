@@ -1,0 +1,10 @@
+
+/Backups/
+/Saved/
+/Intermediate/
+/DerivedDataCache/
+/Binaries/
+/.vs/
+/.codex/
+__pycache__/
+*.pyc

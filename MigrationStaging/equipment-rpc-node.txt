@@ -1,0 +1,16 @@
+Begin Object Class=/Script/BlueprintGraph.K2Node_CustomEvent Name="K2Node_CustomEvent_EquipmentTransfer"
+ CustomFunctionName="ServerTransferWeapon"
+ FunctionFlags=203555008
+ NodePosX=0
+ NodePosY=1800
+ NodeGuid=1F783842465D49BEA0EF45623E613C0B
+ CustomProperties Pin (PinId=AE13E149498446CB88EA07F85E510653,PinName="then",Direction="EGPD_Output",PinType.PinCategory="exec",PinType.PinSubCategoryObject=None,)
+ CustomProperties Pin (PinId=2196E983BC334A419C538FCE5861854E,PinName="SourceLocation",Direction="EGPD_Output",PinType.PinCategory="int",PinType.PinSubCategoryObject=None,)
+ CustomProperties UserDefinedPin (PinName="SourceLocation",PinType=(PinCategory="int"),DesiredPinDirection=EGPD_Output)
+ CustomProperties Pin (PinId=3B5664A3E6FA489AB310BB712132A651,PinName="TargetLocation",Direction="EGPD_Output",PinType.PinCategory="int",PinType.PinSubCategoryObject=None,)
+ CustomProperties UserDefinedPin (PinName="TargetLocation",PinType=(PinCategory="int"),DesiredPinDirection=EGPD_Output)
+ CustomProperties Pin (PinId=3B5664A3E6FA489AB310BB712132A652,PinName="ExpectedInstance",Direction="EGPD_Output",PinType.PinCategory="string",PinType.PinSubCategoryObject=None,)
+ CustomProperties UserDefinedPin (PinName="ExpectedInstance",PinType=(PinCategory="string"),DesiredPinDirection=EGPD_Output)
+ CustomProperties Pin (PinId=3B5664A3E6FA489AB310BB712132A653,PinName="ExpectedVersion",Direction="EGPD_Output",PinType.PinCategory="int",PinType.PinSubCategoryObject=None,)
+ CustomProperties UserDefinedPin (PinName="ExpectedVersion",PinType=(PinCategory="int"),DesiredPinDirection=EGPD_Output)
+End Object

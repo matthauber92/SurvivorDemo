@@ -1,0 +1,14 @@
+Begin Object Class=/Script/BlueprintGraph.K2Node_CustomEvent Name="K2Node_CustomEvent_Interaction"
+ CustomFunctionName="ServerInteract"
+ FunctionFlags=203555008
+ NodePosX=600
+ NodePosY=200
+ NodeGuid=A787ADD18EAE420286D7ECF48E097EFF
+ CustomProperties Pin (PinId=1B7CB72ED61042269F84353DEED38253,PinName="then",Direction="EGPD_Output",PinType.PinCategory="exec",PinType.PinSubCategoryObject=None,)
+ CustomProperties Pin (PinId=5AF74E24A7A04E70BFDDF70B665681BB,PinName="Target",Direction="EGPD_Output",PinType.PinCategory="object",PinType.PinSubCategoryObject="/Script/CoreUObject.Class'/Script/Engine.Actor'",)
+ CustomProperties UserDefinedPin (PinName="Target",PinType=(PinCategory="object",PinSubCategoryObject="/Script/CoreUObject.Class'/Script/Engine.Actor'"),DesiredPinDirection=EGPD_Output)
+ CustomProperties Pin (PinId=4071A04F02FE4D388AB0F16709A07FDC,PinName="ViewOrigin",Direction="EGPD_Output",PinType.PinCategory="struct",PinType.PinSubCategoryObject="/Script/CoreUObject.ScriptStruct'/Script/CoreUObject.Vector'",)
+ CustomProperties UserDefinedPin (PinName="ViewOrigin",PinType=(PinCategory="struct",PinSubCategoryObject="/Script/CoreUObject.ScriptStruct'/Script/CoreUObject.Vector'"),DesiredPinDirection=EGPD_Output)
+ CustomProperties Pin (PinId=346AFA2D4BFA42F79E0965619ADC9615,PinName="ViewDirection",Direction="EGPD_Output",PinType.PinCategory="struct",PinType.PinSubCategoryObject="/Script/CoreUObject.ScriptStruct'/Script/CoreUObject.Vector'",)
+ CustomProperties UserDefinedPin (PinName="ViewDirection",PinType=(PinCategory="struct",PinSubCategoryObject="/Script/CoreUObject.ScriptStruct'/Script/CoreUObject.Vector'"),DesiredPinDirection=EGPD_Output)
+End Object

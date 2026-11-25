@@ -1,0 +1,18 @@
+Begin Object Class=/Script/BlueprintGraph.K2Node_CustomEvent Name="K2Node_CustomEvent_InventoryMove"
+ CustomFunctionName="ServerMoveInventory"
+ FunctionFlags=203555008
+ NodePosX=0
+ NodePosY=1200
+ NodeGuid=80D4BD6EA0334093BB45D5F9BE7335A2
+ CustomProperties Pin (PinId=F9392B88BFAF4D8B97312EDAE24AA10D,PinName="then",Direction="EGPD_Output",PinType.PinCategory="exec",PinType.PinSubCategoryObject=None,)
+ CustomProperties Pin (PinId=5B72FEECF10847E49AE7161BB0119CF2,PinName="SourceSlot",Direction="EGPD_Output",PinType.PinCategory="int",PinType.PinSubCategoryObject=None,)
+ CustomProperties UserDefinedPin (PinName="SourceSlot",PinType=(PinCategory="int"),DesiredPinDirection=EGPD_Output)
+ CustomProperties Pin (PinId=D89AC74EE51340128E91EB32D49B18AB,PinName="TargetSlot",Direction="EGPD_Output",PinType.PinCategory="int",PinType.PinSubCategoryObject=None,)
+ CustomProperties UserDefinedPin (PinName="TargetSlot",PinType=(PinCategory="int"),DesiredPinDirection=EGPD_Output)
+ CustomProperties Pin (PinId=C9766D84A2C845EE87E9245539F3BE47,PinName="ExpectedID",Direction="EGPD_Output",PinType.PinCategory="name",PinType.PinSubCategoryObject=None,)
+ CustomProperties UserDefinedPin (PinName="ExpectedID",PinType=(PinCategory="name"),DesiredPinDirection=EGPD_Output)
+ CustomProperties Pin (PinId=ABD055463BE54999946341B32AD7AC64,PinName="ExpectedQuantity",Direction="EGPD_Output",PinType.PinCategory="int",PinType.PinSubCategoryObject=None,)
+ CustomProperties UserDefinedPin (PinName="ExpectedQuantity",PinType=(PinCategory="int"),DesiredPinDirection=EGPD_Output)
+ CustomProperties Pin (PinId=4755512B10474864BCF8BC7C2C732C1B,PinName="ExpectedLayoutVersion",Direction="EGPD_Output",PinType.PinCategory="int",PinType.PinSubCategoryObject=None,)
+ CustomProperties UserDefinedPin (PinName="ExpectedLayoutVersion",PinType=(PinCategory="int"),DesiredPinDirection=EGPD_Output)
+End Object

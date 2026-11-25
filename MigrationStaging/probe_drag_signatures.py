@@ -1,0 +1,4 @@
+import unreal
+print(unreal.BlueprintGraphEditor.add_custom_event_node.__doc__)
+print(unreal.BlueprintGraphEditor.add_dispatcher_event_node.__doc__)
+print(unreal.BlueprintGraphEditor.add_node_pin.__doc__)

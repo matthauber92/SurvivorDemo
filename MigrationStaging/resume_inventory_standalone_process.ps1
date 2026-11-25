@@ -1,0 +1,69 @@
+Add-Type -AssemblyName System.Drawing
+Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+public static class InventoryUIWindow {
+ public delegate bool EnumProc(IntPtr h,IntPtr p);
+ [DllImport("user32.dll")] public static extern bool EnumWindows(EnumProc cb,IntPtr p);
+ [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h,out uint pid);
+ [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h,int mode);
+ public static void Reveal(uint target) { EnumWindows((h,p)=>{uint pid; GetWindowThreadProcessId(h,out pid); if(pid==target){ RECT r; GetWindowRect(h,out r); if(r.Right-r.Left>500 && r.Bottom-r.Top>400) ShowWindow(h,5); } return true;},IntPtr.Zero); }
+
+ [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
+ [DllImport("user32.dll")] public static extern void keybd_event(byte key,byte scan,uint flags,UIntPtr extra);
+ [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h,out RECT rect);
+ [DllImport("user32.dll")] public static extern bool SetCursorPos(int x,int y);
+ [DllImport("user32.dll")] public static extern void mouse_event(uint flags,uint x,uint y,uint data,UIntPtr extra);
+ public struct RECT { public int Left,Top,Right,Bottom; }
+}
+"@
+$projectFile = Join-Path $PSScriptRoot '../AIExample.uproject'
+$reportDir = Join-Path $PSScriptRoot '../Saved/InventoryUIValidation'
+$gameProcess = Get-Process -Id 2444
+[InventoryUIWindow]::Reveal(2444)
+
+try {
+ for ($attempt=0; $attempt -lt 50; $attempt++) {
+  Start-Sleep -Milliseconds 800
+  $gameProcess.Refresh()
+  if ($gameProcess.HasExited) { throw 'Standalone exited before window creation' }
+  if ($gameProcess.MainWindowHandle -ne [IntPtr]::Zero) { break }
+ }
+ Start-Sleep -Seconds 4
+ $gameWindow=$gameProcess.MainWindowHandle
+ if ($gameWindow -eq [IntPtr]::Zero) { throw 'No standalone window' }
+ [InventoryUIWindow]::keybd_event(18,0,0,[UIntPtr]::Zero)
+ [InventoryUIWindow]::keybd_event(18,0,2,[UIntPtr]::Zero)
+ [void][InventoryUIWindow]::SetForegroundWindow($gameWindow)
+ Start-Sleep -Milliseconds 500
+ $rect=New-Object InventoryUIWindow+RECT
+ [void][InventoryUIWindow]::GetWindowRect($gameWindow,[ref]$rect)
+ [void][InventoryUIWindow]::SetCursorPos(($rect.Left+$rect.Right)/2,($rect.Top+$rect.Bottom)/2)
+ [InventoryUIWindow]::mouse_event(2,0,0,0,[UIntPtr]::Zero)
+ [InventoryUIWindow]::mouse_event(4,0,0,0,[UIntPtr]::Zero)
+ function Press-Key([byte]$key) {
+  [InventoryUIWindow]::keybd_event($key,0,0,[UIntPtr]::Zero)
+  Start-Sleep -Milliseconds 120
+  [InventoryUIWindow]::keybd_event($key,0,2,[UIntPtr]::Zero)
+  Start-Sleep -Milliseconds 600
+ }
+ function Capture-Game([string]$name) {
+  [void][InventoryUIWindow]::GetWindowRect($gameWindow,[ref]$rect)
+  $bitmap=New-Object System.Drawing.Bitmap(($rect.Right-$rect.Left),($rect.Bottom-$rect.Top))
+  $graphics=[System.Drawing.Graphics]::FromImage($bitmap)
+  $graphics.CopyFromScreen($rect.Left,$rect.Top,0,0,$bitmap.Size)
+  $bitmap.Save((Join-Path $reportDir $name),[System.Drawing.Imaging.ImageFormat]::Png)
+  $graphics.Dispose();$bitmap.Dispose()
+ }
+ Press-Key 69
+ Press-Key 73
+ Capture-Game 'standalone-I-open.png'
+ Press-Key 73
+ Capture-Game 'standalone-I-close.png'
+ Press-Key 73
+ Press-Key 27
+ Capture-Game 'standalone-Escape-close.png'
+ Write-Output 'Standalone screenshots captured for I open, I close, and Escape close.'
+} finally {
+ if (-not $gameProcess.HasExited) { [void]$gameProcess.CloseMainWindow() }
+}

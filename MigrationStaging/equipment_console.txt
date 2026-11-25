@@ -1,0 +1,1 @@
+py s=unreal.get_default_object(unreal.PythonScriptPluginSettings); s.set_editor_property("remote_execution",False); s.set_editor_property("remote_execution",True)

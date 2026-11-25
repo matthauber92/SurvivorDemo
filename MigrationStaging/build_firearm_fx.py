@@ -1,0 +1,66 @@
+import unreal,sys
+from pathlib import Path
+sys.path.insert(0,str(Path(unreal.Paths.project_dir())/'MigrationStaging'))
+from weapon_extension_helpers import *
+from editor_toolset.toolsets.actor import ActorTools as A
+from editor_toolset.toolsets.blueprint import _BlueprintCache
+at=unreal.AssetToolsHelpers.get_asset_tools()
+for name in ['NS_RevolverMuzzle','NS_ShotgunMuzzle','NS_BulletImpact']:
+ if not asset('Combat/'+name):unreal.EditorAssetLibrary.duplicate_asset(H+'07_ParticleFX/Pistol/NS_Pistol',R+'Combat/'+name)
+mat=asset('Combat/M_BulletTracer')
+if not mat:
+ mat=at.create_asset('M_BulletTracer',R+'Combat',unreal.Material,unreal.MaterialFactoryNew())
+ mat.set_editor_property('shading_model',unreal.MaterialShadingModel.MSM_UNLIT)
+ color=unreal.MaterialEditingLibrary.create_material_expression(mat,unreal.MaterialExpressionConstant3Vector)
+ color.set_editor_property('constant',unreal.LinearColor(8,4,0.6,1));unreal.MaterialEditingLibrary.connect_material_property(color,'',unreal.MaterialProperty.MP_EMISSIVE_COLOR);unreal.MaterialEditingLibrary.recompile_material(mat);unreal.EditorAssetLibrary.save_loaded_asset(mat,False)
+tracer=asset('Combat/BP_BulletTracer')
+if not tracer:
+ f=unreal.BlueprintFactory();f.set_editor_property('parent_class',unreal.Actor);tracer=at.create_asset('BP_BulletTracer',R+'Combat',unreal.Blueprint,f)
+ m=A.add_component(tracer,unreal.StaticMeshComponent.static_class(),'TracerMesh');m.set_static_mesh(unreal.load_asset('/Engine/BasicShapes/Cube'));m.set_material(0,mat);m.set_collision_enabled(unreal.CollisionEnabled.NO_COLLISION);m.set_cast_shadow(False)
+fn(tracer,'InitializeTrace',[('Start','Vector'),('End','Vector')])
+write(tracer,'InitializeTrace','''(fn InitializeTrace (Start End)
+ (Transformation|SetActorLocation :NewLocation (* (+ Start End) 0.5) :bSweep false :bTeleport true)
+ (Transformation|SetActorRotation :NewRotation (Math|Rotator|MakeRotfromX (- End Start)))
+ (Transformation|SetActorScale3D :NewScale3D (Math|Vector|MakeVector (/ (Math|Vector|VectorLength (- End Start)) 100.0) 0.004 0.004))
+ (Actor|SetLifeSpan :InLifespan 0.045))''');save(tracer)
+bp=asset('Interaction/BP_SurvivorInteractionCharacter')
+fn(bp,'PlayFirearmBallistics')
+write(bp,'PlayFirearmBallistics','''(fn PlayFirearmBallistics ()
+ (for i (range (Utilities|Array|Length (Variables|Default|GetPublicShotEnds)))
+  (bind End (Utilities|Array|Get(acopy) (Variables|Default|GetPublicShotEnds) i))
+  (bind Trace (Game|SpawnActorfromClass :Class "/Game/AIExample/Combat/BP_BulletTracer.BP_BulletTracer_C" :SpawnTransform (Math|Transform|MakeTransform) :CollisionHandlingOverride "AlwaysSpawn"))
+  (Class|BPBulletTracer|InitializeTrace :self Trace :Start (Variables|Default|GetPublicShotStart) :End End)
+  (if (Utilities|Array|Get(acopy) (Variables|Default|GetPublicShotHits) i)
+   (Niagara|SpawnSystematLocation :SystemTemplate "/Game/AIExample/Combat/NS_BulletImpact.NS_BulletImpact" :Location End :Rotation (Math|Rotator|MakeRotfromX (- (Variables|Default|GetPublicShotStart) End)) :Scale "0.15,0.15,0.15" :bAutoDestroy true))))''')
+def obj(p):return '"'+p+'.'+p.split('/')[-1]+'"'
+def selection(name,cls,pistol,revolver,shotgun,id='(Variables|Default|GetPublicShotWeapon)'):
+ fn(bp,name,[],[('Asset',cls.static_class())]);write(bp,name,'(fn '+name+' () (if (== '+id+' "Weapon.Shotgun") (return '+obj(shotgun)+')) (if (== '+id+' "Weapon.Revolver") (return '+obj(revolver)+')) (return '+obj(pistol)+'))');return '(CallFunction|'+name+')'
+sound=selection('GetShotSound',unreal.SoundBase,H+'06_SFX/GunSFX/Pistol/SC_Pistol_Fire',H+'06_SFX/GunSFX/Revolver/SFX_Revolver_Shot_2',H+'06_SFX/GunSFX/Shotgun/Shotgun_Shoot_Cue')
+fx=selection('GetShotFX',unreal.NiagaraSystem,H+'07_ParticleFX/Pistol/NS_Pistol',R+'Combat/NS_RevolverMuzzle',R+'Combat/NS_ShotgunMuzzle')
+anim=selection('GetShotAnimation',unreal.AnimSequenceBase,R+'Combat/Animation/Survivor_MM_Pistol_Fire',R+'Combat/Animation/Survivor_MM_Pistol_Fire',R+'Combat/Animation/Survivor_MM_Rifle_Fire')
+B.compile_blueprint(bp,warnings_as_errors=True);_BlueprintCache.invalidate(bp)
+write(bp,'PlayPistolShot',f'''(fn PlayPistolShot ()
+ (CallFunction|NoteHipFire)
+ (Animation|Montage|PlaySlotAnimationasDynamicMontage :self (Components|SkeletalMesh|GetAnimInstance (Variables|Character|GetMesh)) :Asset {anim} :SlotNodeName "PistolUpperBody" :BlendInTime 0.02 :BlendOutTime 0.10 :LoopCount 1)
+ (bind FX (Niagara|SpawnSystematLocation :SystemTemplate {fx} :Location (Variables|Default|GetPublicShotStart) :Rotation (Math|Rotator|MakeRotfromX (- (Utilities|Array|Get(acopy) (Variables|Default|GetPublicShotEnds) 0) (Variables|Default|GetPublicShotStart))) :Scale (select (== (Variables|Default|GetPublicShotWeapon) "Weapon.Shotgun") (Math|Vector|MakeVector 0.32 0.32 0.32) (Math|Vector|MakeVector 0.18 0.18 0.18)) :bAutoDestroy true))
+ (Audio|PlaySoundatLocation :Sound {sound} :Location (Variables|Default|GetPublicShotStart) :AttenuationSettings "/Game/AIExample/Combat/SA_Pistol.SA_Pistol" :OwningActor self)
+ (CallFunction|PlayFirearmBallistics)
+ (if (Pawn|IsLocallyControlled)
+  (Pawn|Input|AddControllerPitchInput :Val (select (== (Variables|Default|GetPublicShotWeapon) "Weapon.Shotgun") -1.4 (select (== (Variables|Default|GetPublicShotWeapon) "Weapon.Revolver") -1.0 -0.65)))
+  (Pawn|Input|AddControllerYawInput :Val (Math|Random|RandomFloatinRange -0.15 0.15))))''')
+# Separate reload clips prevent pistol magazine sounds playing on the revolver.
+rev=asset('Combat/Animation/Revolver_Reload') or unreal.EditorAssetLibrary.duplicate_asset(R+'Combat/Animation/Survivor_MM_Pistol_Reload',R+'Combat/Animation/Revolver_Reload')
+if unreal.AnimationLibrary.is_valid_anim_notify_track_name(rev,'PistolReloadAudio'):unreal.AnimationLibrary.remove_animation_notify_events_by_track(rev,'PistolReloadAudio')
+unreal.EditorAssetLibrary.save_loaded_asset(rev,False)
+selection('GetReloadAnimation',unreal.AnimSequenceBase,R+'Combat/Animation/Survivor_MM_Pistol_Reload',R+'Combat/Animation/Revolver_Reload',R+'Combat/Animation/Survivor_MM_Rifle_Reload','(CallFunction|GetActiveFirearmID)')
+selection('GetReloadSound',unreal.SoundBase,H+'06_SFX/GunSFX/Revolver/Revolver_Load_Bullet_Cue',H+'06_SFX/GunSFX/Revolver/Revolver_Load_Bullet_Cue',H+'06_SFX/GunSFX/Shotgun/Shotgun_Reload_Slow_Cue','(CallFunction|GetActiveFirearmID)')
+B.compile_blueprint(bp,warnings_as_errors=True);_BlueprintCache.invalidate(bp)
+write(bp,'RefreshPistolReload','''(fn RefreshPistolReload ()
+ (if (Variables|Default|GetPublicReloading)
+  (bind ID (CallFunction|GetActiveFirearmID))
+  (Animation|Montage|PlaySlotAnimationasDynamicMontage :self (Components|SkeletalMesh|GetAnimInstance (Variables|Character|GetMesh)) :Asset (CallFunction|GetReloadAnimation) :SlotNodeName "PistolUpperBody" :BlendInTime 0.08 :BlendOutTime 0.12 :LoopCount 1 :InPlayRate (select (== ID "Weapon.Revolver") 0.714 1.0))
+  (if (or (== ID "Weapon.Revolver") (== ID "Weapon.Shotgun"))
+   (Audio|PlaySoundatLocation :Sound (CallFunction|GetReloadSound) :Location (Transformation|GetActorLocation) :AttenuationSettings "/Game/AIExample/Combat/SA_Pistol.SA_Pistol"))
+  (else (Animation|Montage|StopSlotAnimation :self (Components|SkeletalMesh|GetAnimInstance (Variables|Character|GetMesh)) :SlotNodeName "PistolUpperBody" :InBlendOutTime 0.10))))''')
+save(bp)
+print('FIREARM_FX_READY')
